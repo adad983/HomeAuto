@@ -1,0 +1,744 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+
+
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent)
+    , ui(new Ui::MainWindow)
+{
+    ui->setupUi(this);
+
+    parlorLight     = false;
+    parlorLight_2   = false;
+    bedroomLight    = false;
+    balconyLight    = false;
+    washLight       = false;
+    washLight_2     = false;
+    balconyDoor     = false;
+    balconyDoor_2   = false;
+    parlorCurtain   = false;
+    parlorCurtain_2 = false;
+    parlorAirc      = false;
+    parlorAirc_2    = false;
+
+#if 1
+    fd = ::open("/dev/led_drv", O_RDWR);
+    if (fd == -1)
+    {
+        perror("open");
+        return;
+    }
+#endif
+    isLed   = false;
+    isLed_2 = false;
+    isLed_3 = false;
+    isLed_4 = false;
+
+
+    buf[0] = 0;
+    buf[1] = 7;
+    ::write(fd, buf, sizeof(buf));
+
+    buf[0] = 0;
+    buf[1] = 8;
+    ::write(fd, buf, sizeof(buf));
+
+    buf[0] = 0;
+    buf[1] = 9;
+    ::write(fd, buf, sizeof(buf));
+
+    buf[0] = 0;
+    buf[1] = 10;
+    ::write(fd, buf, sizeof(buf));
+
+    //    QIcon icon = QIcon("background-image: url(:/image/bg1.jpg);");
+    //    setWindowIcon(icon);
+    //    QPainter p(this);
+    //    p.drawPixmap(0, 0, width(), height(), QPixmap("background-image: url(:/image/bg1.jpg);"));
+    //    setStyleSheet("#MainWindow{background-image: url(:/image/bg1.jpg);}");
+
+    index = 0;
+
+    isMusicPlay = false;
+    isListMusic = false;
+    ui->musicListWidget->hide();
+
+    ui->prevButton->setEnabled(false);
+    ui->playButton->setEnabled(false);
+    ui->nextButton->setEnabled(false);
+
+
+    connect(this, &MainWindow::send_musicListWidget_row, this,
+            &MainWindow::set_selectMusicListWidget_item);
+
+
+    //对于继承于QWidget的控件或是窗口，将整个控件当做图形元素，对该图形元素进行设置透明度效果：
+    QGraphicsOpacityEffect* opacityEffect = new QGraphicsOpacityEffect;
+    ui->tabWidget->setGraphicsEffect(opacityEffect);
+    //    ui->textBrowser->setGraphicsEffect(opacityEffect);
+    //设置透明度
+    opacityEffect->setOpacity(0.9);
+
+    //使用颜色中的透明度值设置：rgba(200, 170, 0)最后一位表示透明度
+    QWidget* p = new QWidget;
+    p->setAutoFillBackground(true);
+
+
+    QPalette palette;
+    // 最后一项为透明度
+    palette.setColor(QPalette::Background, QColor(192, 253, 123, 100));   // 最后一项为透明度
+    p->setPalette(palette);
+
+    setStyleSheet("#MainWindow{background-image: url(:/image/bg1.jpg);}");
+
+    //    QPalette pll = ui->tabWidget->palette();
+    //    pll.setBrush(QPalette::Base, QBrush(QColor(255, 255, 255, 0)));
+    //    ui->tabWidget->setPalette(pll);
+
+
+    // QTabWidget { background-color: rgb(255,132,139,0);border-radius: 3px;color: rgb(0,0,0):}
+
+
+    //    ui->pushButton->setStyleSheet("image: url(:/image/1.jpg);");
+    //        ui->label_2->setStyleSheet("image: url(:/image/1.jpg);");
+
+    //[1] 创建网络访问管理者
+    manager = new QNetworkAccessManager(this);
+
+    //[3]建立与finished信号的槽函数
+    connect(manager, &QNetworkAccessManager::finished, this, &MainWindow::weather_data);
+
+    connect(&timer, &QTimer::timeout, this, &MainWindow::update_time);
+
+    ndate = QDate::currentDate();
+
+    timer.start(1000);
+    time = QTime::currentTime();
+
+    on_pushButton_clicked();
+}
+
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::on_cameraControlButton_clicked()
+{
+
+
+    if (isMusicPlay)
+    {
+        system("killall -STOP mplayer &");
+        ui->playButton->setStyleSheet("background-color: rgba(255, 255, 255, 10%);border:1px solid "
+                                      "darkkhaki;border-image: url(:/image/play.png);");
+        isMusicPlay = false;
+    }
+
+    monitorWindow* mow = new monitorWindow(this);
+
+    mow->show();
+
+    this->hide();
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    QString cur =
+        QString("http://autodev.openspeech.cn/csp/api/v2.1/"
+                "weather?openId=aiuicus&clientType=android&sign=android&city=%1&latitude="
+                "39.902895&longitude=116.427915&needMoreData=true&pageNo=1&pageSize=7")
+            //        QString("https://v0.yiketianqi.com/"
+            //                "api?unescape=1&version=v91&appid=43656176&appsecret=I42og6Lm&ext=&cityid=&city=%1")
+            .arg(ui->comboBox->currentText());
+    //[2] 网络请求
+    QUrl            url(cur);   //将要请求的网址，做为参数传入
+    QNetworkRequest request(url);
+    manager->get(request);
+    //    textWindow* tx = new textWindow(this);
+    //    tx->show();
+    //    this->hide();
+}
+
+void MainWindow::weather_data(QNetworkReply* reply)
+{
+    QByteArray array = reply->readAll();
+#if 0
+    QJsonDocument doc    = QJsonDocument::fromJson(array);
+    QJsonObject   object = doc.object();
+
+
+    //    QString city = object.value("city").toString();
+
+    QJsonArray  data  = object.value("data").toArray();
+    QJsonObject data1 = data[0].toObject();
+
+    QString dtime     = data1.value("date").toString();
+    QString week      = data1.value("week").toString();
+    QString humidity  = data1.value("humidity").toString();
+    QString narrative = data1.value("narrative").toString();
+
+    //    ui->cityLabel->setText(city);
+    ui->updateTimeLabel->setText(dtime);
+    ui->weekLabel->setText(week);
+    ui->humidityLabel->setText(humidity);
+    ui->narrativeLabel->setText(narrative);
+#endif
+    QJsonDocument doc    = QJsonDocument::fromJson(array);
+    QJsonObject   object = doc.object();
+
+    QJsonObject data = object.value("data").toObject();
+
+    QJsonArray  list    = data.value("list").toArray();
+    QJsonObject listArr = list[0].toObject();
+
+
+    QString date     = listArr.value("date").toString();
+    QString weather  = listArr.value("weather").toString();
+    QString humidity = listArr.value("humidity").toString();
+    QString wind     = listArr.value("wind").toString();
+    //    QString
+
+
+    ui->updateTimeLabel->setText(date);
+    ui->humidityLabel->setText(humidity);
+    ui->narrativeLabel->setText(weather);
+    ui->narrativeLabel_2->setText(wind);
+}
+
+void MainWindow::update_time()
+{
+    time = time.addMSecs(1000);
+    ui->timeLabel->setText(time.toString("hh:mm:ss"));
+    ui->weekLabel->setText(ndate.toString("dddd"));
+
+    //    qDebug() << time.toString("hh:mm:ss");
+}
+
+void MainWindow::user_label(const QString& account)
+{
+    ui->userLabel->setText(account);
+}
+
+
+void MainWindow::on_prevButton_clicked() {}
+
+void MainWindow::on_playButton_clicked()
+{
+    if (!isMusicPlay)
+    {
+        system("killall -CONT mplayer &");
+        //        ui->playButton->setStyleSheet("border-image: url(:/image/4.jpg);");
+        ui->playButton->setStyleSheet("background-color: rgba(255, 255, 255, 10%);border:1px solid "
+                                      "darkkhaki;border-image: url(:/image/pause.png);");
+        isMusicPlay = true;
+    }
+    else
+    {
+        system("killall -STOP mplayer &");
+        ui->playButton->setStyleSheet("background-color: rgba(255, 255, 255, 10%);border:1px solid "
+                                      "darkkhaki;border-image: url(:/image/play.png);");
+        isMusicPlay = false;
+    }
+}
+
+void MainWindow::on_nextButton_clicked()
+{
+
+    index = ++index % musicLists.size();
+    qDebug() << musicLists[index];
+#if 1
+    system("killall -9 mplayer &");
+
+    QString cmd = QString("mplayer %1 &").arg(musicLists[index]);
+
+    system(cmd.toStdString().c_str());
+
+#endif
+    emit send_musicListWidget_row(index);
+}
+
+void MainWindow::on_musicListButton_clicked()
+{
+    if (!isListMusic)
+    {
+        ui->musicListWidget->show();
+        isListMusic = true;
+    }
+    else
+    {
+        ui->musicListWidget->hide();
+        isListMusic = false;
+    }
+}
+
+void MainWindow::on_addMusicButton_clicked()
+{
+    QString pathname = QFileDialog::getOpenFileName(this);
+
+    musicLists.append(pathname);
+
+    QStringList lists = pathname.split('/');
+
+    ui->musicListWidget->addItem(new QListWidgetItem(lists[lists.size() - 1]));
+}
+
+void MainWindow::on_musicListWidget_itemClicked(QListWidgetItem* item)
+{
+    index = ui->musicListWidget->row(item);
+}
+
+void MainWindow::on_musicListWidget_itemDoubleClicked(QListWidgetItem* item)
+{
+    ui->prevButton->setEnabled(true);
+    ui->playButton->setEnabled(true);
+    ui->nextButton->setEnabled(true);
+
+    ui->playButton->setStyleSheet("background-color: rgba(255, 255, 255, 10%);border:1px solid "
+                                  "darkkhaki;border-image: url(:/image/pause.png);");
+    isMusicPlay = true;
+
+    int row = ui->musicListWidget->row(item);
+#if 1
+    system("killall -9 mplayer &");
+
+    QString cmd = QString("mplayer %1 &").arg(musicLists[row]);
+
+    system(cmd.toStdString().c_str());
+#endif
+    index = row;
+    qDebug() << musicLists[row];
+}
+
+void MainWindow::set_selectMusicListWidget_item(int row)
+{
+    QListWidgetItem* item = ui->musicListWidget->item(row);
+
+    item->setSelected(true);
+}
+
+void MainWindow::on_parlorLightButton_clicked()
+{
+    if (!parlorLight)
+    {
+
+        buf[0] = 1;
+        buf[1] = 7;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->parlorLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->parlorLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->parlorLightLabel->setText("开启");
+        ui->parlorLightLabel_2->setText("开启");
+
+        parlorLight   = true;
+        parlorLight_2 = true;
+    }
+    else
+    {
+
+        buf[0] = 0;
+        buf[1] = 7;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->parlorLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->parlorLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->parlorLightLabel->setText("关闭");
+        ui->parlorLightLabel_2->setText("关闭");
+
+        parlorLight   = false;
+        parlorLight_2 = false;
+    }
+}
+
+void MainWindow::on_parlorLightButton_2_clicked()
+{
+    if (!parlorLight_2)
+    {
+        buf[0] = 1;
+        buf[1] = 7;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->parlorLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->parlorLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->parlorLightLabel->setText("开启");
+        ui->parlorLightLabel_2->setText("开启");
+
+        parlorLight   = true;
+        parlorLight_2 = true;
+    }
+    else
+    {
+
+        buf[0] = 0;
+        buf[1] = 7;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->parlorLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->parlorLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->parlorLightLabel->setText("关闭");
+        ui->parlorLightLabel_2->setText("关闭");
+
+        parlorLight   = false;
+        parlorLight_2 = false;
+    }
+}
+
+void MainWindow::on_bedroomLightButton_clicked()
+{
+    if (!bedroomLight)
+    {
+        buf[0] = 1;
+        buf[1] = 9;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->bedroomLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+
+        ui->bedroomLightLabel->setText("开启");
+        bedroomLight = true;
+    }
+    else
+    {
+        buf[0] = 0;
+        buf[1] = 9;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->bedroomLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->bedroomLightLabel->setText("开启");
+        bedroomLight = false;
+    }
+}
+
+void MainWindow::on_balconyLightButton_clicked()
+{
+    if (!balconyLight)
+    {
+        buf[0] = 1;
+        buf[1] = 10;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->balconyLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+
+        ui->balconyLightLabel->setText("开启");
+        balconyLight = true;
+    }
+    else
+    {
+        buf[0] = 0;
+        buf[1] = 10;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->balconyLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->balconyLightLabel->setText("开启");
+        balconyLight = false;
+    }
+}
+
+void MainWindow::on_washLightButton_clicked()
+{
+
+    if (!washLight)
+    {
+
+        buf[0] = 1;
+        buf[1] = 8;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->washLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->washLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->washLightLabel->setText("开启");
+        ui->washLightLable->setText("开启");
+
+        washLight   = true;
+        washLight_2 = true;
+    }
+    else
+    {
+
+        buf[0] = 0;
+        buf[1] = 8;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->washLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->washLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->washLightLabel->setText("关闭");
+        ui->washLightLable->setText("关闭");
+
+        washLight   = false;
+        washLight_2 = false;
+    }
+}
+
+void MainWindow::on_washLightButton_2_clicked()
+{
+    if (!washLight_2)
+    {
+        buf[0] = 1;
+        buf[1] = 8;
+        ::write(fd, buf, sizeof(buf));
+
+        ui->washLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->washLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledopen.png);");
+        ui->washLightLabel->setText("开启");
+        ui->washLightLable->setText("开启");
+
+        washLight   = true;
+        washLight_2 = true;
+    }
+    else
+    {
+        buf[0] = 0;
+        buf[1] = 8;
+        ::write(fd, buf, sizeof(buf));
+
+
+        ui->washLightButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->washLightButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/ledstop.png);");
+        ui->washLightLabel->setText("关闭");
+        ui->washLightLable->setText("关闭");
+
+        washLight   = false;
+        washLight_2 = false;
+    }
+}
+
+void MainWindow::on_balconyDoorButton_clicked()
+{
+
+    if (!balconyDoor)
+    {
+        ui->balconyDoorButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/opendoor.png);");
+        ui->balconyDoorButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/opendoor.png);");
+        ui->balconyDoorLabel->setText("开启");
+        ui->balconyDoorLabel_2->setText("开启");
+
+        balconyDoor   = true;
+        balconyDoor_2 = true;
+    }
+    else
+    {
+        ui->balconyDoorButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/closedoor.png);");
+        ui->balconyDoorButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/closedoor.png);");
+        ui->balconyDoorLabel->setText("关闭");
+        ui->balconyDoorLabel_2->setText("关闭");
+
+        balconyDoor   = false;
+        balconyDoor_2 = false;
+    }
+}
+
+void MainWindow::on_balconyDoorButton_2_clicked()
+{
+    if (!balconyDoor_2)
+    {
+        ui->balconyDoorButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/opendoor.png);");
+        ui->balconyDoorButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/opendoor.png);");
+        ui->balconyDoorLabel->setText("开启");
+        ui->balconyDoorLabel_2->setText("开启");
+
+        balconyDoor   = true;
+        balconyDoor_2 = true;
+    }
+    else
+    {
+        ui->balconyDoorButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/closedoor.png);");
+        ui->balconyDoorButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/closedoor.png);");
+        ui->balconyDoorLabel->setText("关闭");
+        ui->balconyDoorLabel_2->setText("关闭");
+
+        balconyDoor   = false;
+        balconyDoor_2 = false;
+    }
+}
+
+void MainWindow::on_parlorCurtainButton_clicked()
+{
+    if (!parlorCurtain)
+    {
+        ui->parlorCurtainButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainopen.png);");
+        ui->parlorCurtainButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainopen.png);");
+        ui->parlorCurtainLabel->setText("开启");
+        ui->parlorCurtainLabel_2->setText("开启");
+
+        parlorCurtain   = true;
+        parlorCurtain_2 = true;
+    }
+    else
+    {
+        ui->parlorCurtainButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainclose.png);");
+        ui->parlorCurtainButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainclose.png);");
+        ui->parlorCurtainLabel->setText("关闭");
+        ui->parlorCurtainLabel_2->setText("关闭");
+
+        parlorCurtain   = false;
+        parlorCurtain_2 = false;
+    }
+}
+
+void MainWindow::on_parlorCurtainButton_2_clicked()
+{
+
+    if (!parlorCurtain_2)
+    {
+        ui->parlorCurtainButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainopen.png);");
+        ui->parlorCurtainButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainopen.png);");
+        ui->parlorCurtainLabel->setText("开启");
+        ui->parlorCurtainLabel_2->setText("开启");
+
+        parlorCurtain   = true;
+        parlorCurtain_2 = true;
+    }
+    else
+    {
+        ui->parlorCurtainButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainclose.png);");
+        ui->parlorCurtainButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/curtainclose.png);");
+        ui->parlorCurtainLabel->setText("关闭");
+        ui->parlorCurtainLabel_2->setText("关闭");
+
+        parlorCurtain   = false;
+        parlorCurtain_2 = false;
+    }
+}
+
+void MainWindow::on_parlorAircButton_clicked()
+{
+    if (!parlorAirc)
+    {
+        ui->parlorAircButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airopen.png);");
+        ui->parlorAircButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airopen.png);");
+        ui->parlorAircLabel->setText("开启");
+        ui->parlorAircLabel_2->setText("开启");
+
+        parlorAirc   = true;
+        parlorAirc_2 = true;
+    }
+    else
+    {
+        ui->parlorAircButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airstop.png);");
+        ui->parlorAircButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airstop.png);");
+        ui->parlorAircLabel->setText("关闭");
+        ui->parlorAircLabel_2->setText("关闭");
+
+        parlorAirc   = false;
+        parlorAirc_2 = false;
+    }
+}
+
+void MainWindow::on_parlorAircButton_2_clicked()
+{
+    if (!parlorAirc_2)
+    {
+        ui->parlorAircButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airopen.png);");
+        ui->parlorAircButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airopen.png);");
+        ui->parlorAircLabel->setText("开启");
+        ui->parlorAircLabel_2->setText("开启");
+
+        parlorAirc   = true;
+        parlorAirc_2 = true;
+    }
+    else
+    {
+        ui->parlorAircButton->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airstop.png);");
+        ui->parlorAircButton_2->setStyleSheet(
+            "background-color: rgba(255, 255, 255, 60%);border:1px solid darkkhaki;border-image: "
+            "url(:/image/airstop.png);");
+        ui->parlorAircLabel->setText("关闭");
+        ui->parlorAircLabel_2->setText("关闭");
+
+        parlorAirc   = false;
+        parlorAirc_2 = false;
+    }
+}
+
+void MainWindow::on_backButton_clicked()
+{
+    loginKeyboardWindow *lkw = new loginKeyboardWindow;
+    lkw->show();
+    this->close();
+}

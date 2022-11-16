@@ -1,0 +1,45 @@
+<RCC>
+    <qresource prefix="/">
+        <file>image/1.jpg</file>
+        <file>image/bg.jpeg</file>
+        <file>image/bg1.jpg</file>
+        <file>image/init.jpeg</file>
+        <file>image/init1.jpg</file>
+        <file>image/list.png</file>
+        <file>image/next.png</file>
+        <file>image/pause.png</file>
+        <file>image/play.png</file>
+        <file>image/prev.png</file>
+        <file>image/music.png</file>
+        <file>image/airopen.png</file>
+        <file>image/airstop.png</file>
+        <file>image/clearrobot.png</file>
+        <file>image/closedoor.png</file>
+        <file>image/ledopen.png</file>
+        <file>image/ledstop.png</file>
+        <file>image/monitoring.png</file>
+        <file>image/opendoor.png</file>
+        <file>image/curtainclose.png</file>
+        <file>image/curtainopen.png</file>
+        <file>image/hotwater.png</file>
+        <file>image/vadd.png</file>
+        <file>image/vnext.png</file>
+        <file>image/vplay.png</file>
+        <file>image/vprev.png</file>
+        <file>image/vstop.png</file>
+        <file>image/back.png</file>
+        <file>image/album.png</file>
+        <file>image/sur.png</file>
+        <file>image/video.png</file>
+        <file>image/open.png</file>
+        <file>image/login.png</file>
+        <file>image/captrue.png</file>
+        <file>image/record.png</file>
+        <file>image/start.png</file>
+        <file>image/stop.png</file>
+        <file>image/faceLogin.png</file>
+        <file>image/icLogin.png</file>
+        <file>image/mainLogin.png</file>
+        <file>image/register.png</file>
+    </qresource>
+</RCC>
